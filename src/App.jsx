@@ -73,7 +73,7 @@ function autoCorrelate(buf, sampleRate) {
     rms += v * v;
   }
   rms = Math.sqrt(rms / SIZE);
-  if (rms < 0.008) return { pitch: -1, rms };
+  if (rms < 0.003) return { pitch: -1, rms };
 
   // Trim near-silent edges so the correlation window centers on real signal.
   let r1 = 0;
@@ -160,14 +160,14 @@ export default function VoicePaint() {
   // always reads the latest UI choice without needing to be re-created.
   const brushStyleRef = useRef("watercolor");
   const colorThemeRef = useRef("cyberpunk");
-  const sensitivityRef = useRef(1.4);
+  const sensitivityRef = useRef(1.8);
 
   const [micEnabled, setMicEnabled] = useState(false);
   const [isRequesting, setIsRequesting] = useState(false);
   const [micError, setMicError] = useState("");
   const [brushStyle, setBrushStyle] = useState("watercolor");
   const [colorTheme, setColorTheme] = useState("cyberpunk");
-  const [sensitivity, setSensitivity] = useState(1.4);
+  const [sensitivity, setSensitivity] = useState(1.8);
 
   useEffect(() => {
     brushStyleRef.current = brushStyle;
@@ -423,7 +423,7 @@ export default function VoicePaint() {
     const correlationWindow = timeDataRef.current.subarray(0, 1024);
     const { pitch, rms } = autoCorrelate(correlationWindow, audioCtx.sampleRate);
 
-    const rawVolume = clamp(rms * 5.5, 0, 1);
+    const rawVolume = clamp(rms * 7, 0, 1);
     smoothVolumeRef.current = lerp(smoothVolumeRef.current, rawVolume, 0.22);
     if (pitch > 50 && pitch < 1200) {
       smoothPitchRef.current = lerp(smoothPitchRef.current, pitch, 0.16);
@@ -449,7 +449,7 @@ export default function VoicePaint() {
     const { w, h } = dimsRef.current;
     if (w === 0 || h === 0) return;
 
-    if (volume < 0.015) {
+    if (volume < 0.006) {
       // Silence: let the previous stroke fade gently instead of freezing.
       return;
     }
@@ -521,6 +521,13 @@ export default function VoicePaint() {
       source.connect(gainNode);
       gainNode.connect(analyser);
       // Intentionally not connected to destination — avoids feedback squeal.
+
+      // Some browsers (notably Chrome) create new AudioContexts in a
+      // "suspended" state as an autoplay-protection measure. Without an
+      // explicit resume, the analyser silently reads nothing forever.
+      if (audioCtx.state === "suspended") {
+        await audioCtx.resume();
+      }
 
       setMicEnabled(true);
       cancelAnimationFrame(rafRef.current);
